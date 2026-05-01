@@ -278,6 +278,8 @@ function ReportDetailPage({ reportId }) {
   if (loading) { return <div className="flex justify-center items-center p-10"><Loader2 size={32} className="animate-spin text-slate-800" /></div>; }
   if (!report) { return <div className="p-4 md:p-6 max-w-5xl mx-auto"><h2 className="text-2xl font-bold font-heading">Report not found.</h2></div> }
   
+  const displaySummary = report.status === 'error' ? (report.summary || 'An unknown error occurred during analysis.') : summary;
+
   if (report.status === 'pending') {
     return (
       <div className="p-4 md:p-6 max-w-3xl mx-auto text-center">
@@ -297,36 +299,50 @@ function ReportDetailPage({ reportId }) {
       
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mt-6">
         <div className="p-6 bg-white rounded-lg shadow-xl text-center">
-          <span className="text-6xl font-bold font-heading text-red-600">{report.overall_score}%</span>
+          <span className="text-6xl font-bold font-heading text-red-600">{report.overall_score || 0}%</span>
           <p className="mt-2 text-lg font-medium text-slate-700">Similarity Score</p>
         </div>
         <div className="p-6 bg-white rounded-lg shadow-xl md:col-span-2">
           <h3 className="text-lg font-bold font-heading">Report Details</h3>
-          <p className="mt-2 text-slate-600"><strong>Status:</strong> <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800">{report.status}</span></p>
+          <p className="mt-2 text-slate-600"><strong>Status:</strong> <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${report.status === 'complete' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>{report.status}</span></p>
           <p className="mt-1 text-slate-600"><strong>File Size:</strong> ({(report.fileSize / 1024 / 1024).toFixed(2)} MB)</p>
           <p className="mt-1 text-slate-600"><strong>Uploaded:</strong> {report.createdAt ? new Date(report.createdAt.seconds * 1000).toLocaleString() : 'Just now'}</p>
         </div>
       </div>
       
       <div className="mt-8 p-6 bg-white rounded-lg shadow-xl">
-        <div className="flex justify-between items-center"><h3 className="text-xl font-bold font-heading">AI-Assisted Summary</h3><button onClick={handleGenerateSummary} disabled={loadingSummary} className="flex items-center px-4 py-2 text-sm font-medium text-white bg-slate-800 rounded-md hover:bg-slate-700 disabled:opacity-50">{loadingSummary ? (<Loader2 size={16} className="mr-2 animate-spin" />) : (<Sparkles size={16} className="mr-2" />)}Generate Summary</button></div>
+        <div className="flex justify-between items-center">
+          <h3 className="text-xl font-bold font-heading">
+            {report.status === 'error' ? 'Analysis Error Details' : 'AI-Assisted Summary'}
+          </h3>
+          {report.status !== 'error' && (
+            <button onClick={handleGenerateSummary} disabled={loadingSummary} className="flex items-center px-4 py-2 text-sm font-medium text-white bg-slate-800 rounded-md hover:bg-slate-700 disabled:opacity-50">
+              {loadingSummary ? (<Loader2 size={16} className="mr-2 animate-spin" />) : (<Sparkles size={16} className="mr-2" />)}
+              Generate Summary
+            </button>
+          )}
+        </div>
         {loadingSummary && <div className="flex justify-center items-center h-24"><Loader2 size={24} className="animate-spin text-slate-600" /><p className="ml-3 text-slate-600">AI is analyzing the report...</p></div>}
-        {summary && <p className="mt-4 text-slate-700 whitespace-pre-line">{summary}</p>}
-        {!loadingSummary && !summary && <p className="mt-3 text-slate-500 italic">Click the "Generate Summary" button to get an AI-powered overview of this report.</p>}
+        {displaySummary && <p className={`mt-4 whitespace-pre-line ${report.status === 'error' ? 'text-red-600 font-medium' : 'text-slate-700'}`}>{displaySummary}</p>}
+        {!loadingSummary && !displaySummary && <p className="mt-3 text-slate-500 italic">Click the "Generate Summary" button to get an AI-powered overview of this report.</p>}
       </div>
       
       <div className="mt-8">
         <h3 className="text-xl font-bold font-heading">Matched Sources</h3>
         <div className="mt-4 space-y-6">
-          {report.matches.map((match, index) => (
+          {report.matches && report.matches.length > 0 ? report.matches.map((match, index) => (
             <div key={index} className="p-6 bg-white rounded-lg shadow-xl">
               <h4 className="text-lg font-bold font-heading text-red-700">{match.percent}% Match</h4>
               <p className="text-sm text-slate-600 break-all"><strong>Source:</strong> <span className="text-blue-600">{match.source_id}</span></p>
               <div className="mt-4 space-y-3">
-                {match.snippets.map((snippet, s_index) => (<blockquote key={s_index} className="p-3 border-l-4 border-red-500 bg-red-50 text-red-800">"{snippet.text}"</blockquote>))}
+                {match.snippets && match.snippets.map((snippet, s_index) => (<blockquote key={s_index} className="p-3 border-l-4 border-red-500 bg-red-50 text-red-800">"{snippet.text}"</blockquote>))}
               </div>
             </div>
-          ))}
+          )) : (
+            <div className="p-6 bg-white rounded-lg shadow-xl italic text-slate-500">
+              No matching sources were found for this document.
+            </div>
+          )}
         </div>
       </div>
     </div>
