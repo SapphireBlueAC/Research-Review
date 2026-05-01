@@ -1,5 +1,5 @@
 ﻿import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { LayoutDashboard, UploadCloud, FileText, Users, Menu, X, Loader2, LogOut, CheckCircle, AlertCircle, FileUp, Sparkles, MessageSquare, Send, Shield, History, Bell } from 'lucide-react';
+import { LayoutDashboard, UploadCloud, FileText, Users, Menu, X, Loader2, LogOut, CheckCircle, AlertCircle, FileUp, Sparkles, MessageSquare, Send, Shield, History, Bell, Trash2, Paperclip } from 'lucide-react';
 import { useDropzone } from 'react-dropzone';
 
 // Import Firebase services
@@ -13,7 +13,7 @@ import {
 } from "firebase/auth";
 import { 
   doc, setDoc, addDoc, collection, serverTimestamp, 
-  query, where, onSnapshot, orderBy, getDoc, limit, updateDoc, writeBatch
+  query, where, onSnapshot, orderBy, getDoc, limit, updateDoc, writeBatch, deleteDoc
 } from "firebase/firestore";
 import { ref, uploadBytesResumable, getDownloadURL } from "firebase/storage";
 
@@ -217,7 +217,7 @@ function ReportsPage({ user, onViewReport }) {
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-600">{getStatusChip(report.status)}</td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-600">{report.createdAt ? new Date(report.createdAt.seconds * 1000).toLocaleString() : 'Just now'}</td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-slate-700">{report.overall_score ? `${report.overall_score}%` : '--%'}</td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-slate-700">{report.overall_score !== undefined ? `${report.overall_score}%` : '--%'}</td>
                 </tr>
               ))}
             </tbody>
@@ -255,13 +255,24 @@ function ReportDetailPage({ reportId }) {
     setLoadingSummary(true);
     setSummary('');
     setTimeout(() => {
-      const mockSummary = `This document shows a high similarity score (${report.overall_score}%), primarily driven by ${report.matches.length} sources. 
-A significant portion (${report.matches[0].percent}%) matches ${report.matches[0].source_id}.
-A further ${report.matches[1].percent}% matches ${report.matches[1].source_id}.
-Key areas for review include the introductory definitions and the discussion on ethical offenses.`;
+      if (!report) return;
+      
+      let mockSummary = `This document shows a similarity score of ${report.overall_score}%. `;
+      
+      if (report.matches && report.matches.length > 0) {
+        mockSummary += `The analysis identified ${report.matches.length} matching sources. `;
+        mockSummary += `A significant portion (${report.matches[0].percent}%) matches ${report.matches[0].source_id}. `;
+        if (report.matches.length > 1) {
+          mockSummary += `Other matches include ${report.matches[1].source_id} (${report.matches[1].percent}%). `;
+        }
+      } else {
+        mockSummary += "No specific matching sources were identified. ";
+      }
+      
+      mockSummary += "\n\nKey areas for review include the introductory definitions and the general discussion sections.";
       setSummary(mockSummary.trim());
       setLoadingSummary(false);
-    }, 2000);
+    }, 1500);
   };
 
   if (loading) { return <div className="flex justify-center items-center p-10"><Loader2 size={32} className="animate-spin text-slate-800" /></div>; }
@@ -323,15 +334,82 @@ Key areas for review include the introductory definitions and the discussion on 
 }
 
 // --- Community Page (No changes) ---
-function CommunityPage({ user }) {
+// --- Community Page (UPDATED) ---
+function CommunityPage({ user, profile }) {
   const [posts, setPosts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [newPostTitle, setNewPostTitle] = useState('');
   const [newPostBody, setNewPostBody] = useState('');
+  const [attachedFile, setAttachedFile] = useState(null); // New state for file
   const [postLoading, setPostLoading] = useState(false);
   const [error, setError] = useState('');
-  useEffect(() => { setLoading(true); const postsQuery = query(collection(firestore, "posts"), orderBy("createdAt", "desc")); const unsubscribe = onSnapshot(postsQuery, (querySnapshot) => { const postsData = []; querySnapshot.forEach((doc) => { postsData.push({ id: doc.id, ...doc.data() }); }); setPosts(postsData); setLoading(false); }); return () => unsubscribe(); }, []);
-  const handlePostSubmit = async (e) => { e.preventDefault(); if (!newPostTitle || !newPostBody) { setError("Title and body are required."); return; } setPostLoading(true); setError(''); try { const postDoc = await addDoc(collection(firestore, "posts"), { title: newPostTitle, body: newPostBody, authorId: user.uid, authorEmail: user.email, createdAt: serverTimestamp(), }); await logAuditEvent('POST_CREATE', user, { title: newPostTitle, postId: postDoc.id }); setNewPostTitle(''); setNewPostBody(''); } catch (err) { console.error("Error creating post:", err); setError("Failed to create post. Please try again."); } finally { setPostLoading(false); } };
+
+  // Fetch posts
+  useEffect(() => { 
+    setLoading(true); 
+    const postsQuery = query(collection(firestore, "posts"), orderBy("createdAt", "desc")); 
+    const unsubscribe = onSnapshot(postsQuery, (querySnapshot) => { 
+      const postsData = []; 
+      querySnapshot.forEach((doc) => { postsData.push({ id: doc.id, ...doc.data() }); }); 
+      setPosts(postsData); 
+      setLoading(false); 
+    }); 
+    return () => unsubscribe(); 
+  }, []);
+
+  // Handle Deleting a Post
+  const handleDeletePost = async (postId) => {
+    if (!window.confirm("Are you sure you want to delete this post?")) return;
+    try {
+      await deleteDoc(doc(firestore, "posts", postId));
+      await logAuditEvent('POST_DELETE', user, { postId });
+    } catch (err) {
+      console.error("Error deleting post:", err);
+      alert("Failed to delete post.");
+    }
+  };
+
+  // Handle Submitting a Post
+  const handlePostSubmit = async (e) => { 
+    e.preventDefault(); 
+    if (!newPostTitle || !newPostBody) { setError("Title and body are required."); return; } 
+    setPostLoading(true); 
+    setError(''); 
+    
+    try { 
+      let fileURL = null;
+      let fileName = null;
+
+      // Upload file if attached
+      if (attachedFile) {
+        const storageRef = ref(storage, `community/${user.uid}/${Date.now()}_${attachedFile.name}`);
+        const uploadTask = await uploadBytesResumable(storageRef, attachedFile);
+        fileURL = await getDownloadURL(uploadTask.ref);
+        fileName = attachedFile.name;
+      }
+
+      const postDoc = await addDoc(collection(firestore, "posts"), { 
+        title: newPostTitle, 
+        body: newPostBody, 
+        authorId: user.uid, 
+        authorEmail: user.email, 
+        fileURL: fileURL,
+        fileName: fileName,
+        createdAt: serverTimestamp(), 
+      }); 
+      
+      await logAuditEvent('POST_CREATE', user, { title: newPostTitle, postId: postDoc.id }); 
+      setNewPostTitle(''); 
+      setNewPostBody(''); 
+      setAttachedFile(null); // Reset file
+    } catch (err) { 
+      console.error("Error creating post:", err); 
+      setError("Failed to create post. Please try again."); 
+    } finally { 
+      setPostLoading(false); 
+    } 
+  };
+
   return (
     <div className="p-4 md:p-6 max-w-5xl mx-auto">
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -340,9 +418,31 @@ function CommunityPage({ user }) {
           {loading && <div className="flex justify-center items-center p-10"><Loader2 size={32} className="animate-spin text-slate-800" /></div>}
           {!loading && posts.length === 0 && <p className="text-slate-600">No posts yet. Be the first to start a discussion!</p>}
           {!loading && posts.map((post) => (
-            <div key={post.id} className="p-6 bg-white rounded-lg shadow-xl">
-              <h3 className="text-xl font-bold font-heading text-slate-900">{post.title}</h3>
+            <div key={post.id} className="p-6 bg-white rounded-lg shadow-xl relative group">
+              {/* Delete Button (Visible to Author or Admin) */}
+              {(post.authorId === user.uid || profile?.role === 'admin') && (
+                <button 
+                  onClick={() => handleDeletePost(post.id)} 
+                  className="absolute top-4 right-4 text-slate-300 hover:text-red-500 transition-colors"
+                  title="Delete Post"
+                >
+                  <Trash2 size={18} />
+                </button>
+              )}
+
+              <h3 className="text-xl font-bold font-heading text-slate-900 pr-8">{post.title}</h3>
               <p className="mt-2 text-slate-700 whitespace-pre-line">{post.body}</p>
+              
+              {/* File Attachment Display */}
+              {post.fileURL && (
+                <div className="mt-3 p-2 bg-slate-50 rounded inline-block">
+                  <a href={post.fileURL} target="_blank" rel="noopener noreferrer" className="flex items-center text-sm font-medium text-blue-600 hover:text-blue-800 hover:underline">
+                    <Paperclip size={16} className="mr-2" />
+                    {post.fileName}
+                  </a>
+                </div>
+              )}
+
               <div className="mt-4 pt-3 border-t border-slate-200">
                 <p className="text-xs text-slate-500">Posted by: <span className="font-medium">{post.authorEmail}</span></p>
                 <p className="text-xs text-slate-500">On: {post.createdAt ? new Date(post.createdAt.seconds * 1000).toLocaleString() : 'Just now'}</p>
@@ -354,8 +454,27 @@ function CommunityPage({ user }) {
           <div className="p-6 bg-white rounded-lg shadow-xl sticky top-24">
             <h3 className="text-lg font-bold font-heading">Start a Discussion</h3>
             <form onSubmit={handlePostSubmit} className="mt-4 space-y-4">
-              <div><label className="block text-sm font-medium text-slate-700">Title</label><input type="text" value={newPostTitle} onChange={(e) => setNewPostTitle(e.target.value)} className="w-full px-3 py-2 mt-1 border border-slate-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-slate-500" /></div>
-              <div><label className="block text-sm font-medium text-slate-700">Body</label><textarea value={newPostBody} onChange={(e) => setNewPostBody(e.target.value)} rows="5" className="w-full px-3 py-2 mt-1 border border-slate-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-slate-500" /></div>
+              <div>
+                <label className="block text-sm font-medium text-slate-700">Title</label>
+                <input type="text" value={newPostTitle} onChange={(e) => setNewPostTitle(e.target.value)} className="w-full px-3 py-2 mt-1 border border-slate-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-slate-500" />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-700">Body</label>
+                <textarea value={newPostBody} onChange={(e) => setNewPostBody(e.target.value)} rows="5" className="w-full px-3 py-2 mt-1 border border-slate-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-slate-500" />
+              </div>
+              
+              {/* File Attachment Input */}
+              <div className="flex items-center justify-between mt-2">
+                <label className="flex items-center space-x-2 cursor-pointer text-sm text-slate-600 hover:text-slate-900 transition-colors">
+                  <Paperclip size={16} />
+                  <span className="truncate max-w-[150px]">{attachedFile ? attachedFile.name : "Attach a file"}</span>
+                  <input type="file" className="hidden" onChange={(e) => setAttachedFile(e.target.files[0])} />
+                </label>
+                {attachedFile && (
+                  <button type="button" onClick={() => setAttachedFile(null)} className="text-xs text-red-500 hover:underline">Remove</button>
+                )}
+              </div>
+
               {error && <p className="text-sm text-red-600">{error}</p>}
               <button type="submit" disabled={postLoading} className="flex items-center justify-center w-full px-4 py-2 font-medium text-white bg-slate-800 rounded-md hover:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-slate-500 focus:ring-offset-2 disabled:opacity-50">
                 {postLoading ? <Loader2 className="animate-spin" /> : <><Send size={16} className="mr-2" />Post</>}
@@ -492,7 +611,7 @@ function PageContent({ activePage, user, profile, notifications, onMarkAllAsRead
     case 'ReportDetail':
       content = <ReportDetailPage reportId={selectedReportId} />; break;
     case 'Community':
-      content = <CommunityPage user={user} />; break;
+      content = <CommunityPage user={user} profile={profile} />; break;
     case 'Messages':
       content = <MessagesPage user={user} profile={profile} />; break;
     case 'Notifications':
