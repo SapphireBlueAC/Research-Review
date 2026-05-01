@@ -1,84 +1,84 @@
-﻿# Research Review: AI-Powered Plagiarism Checker
+# Research Review - Documentation & Tutorial
 
-Research Review is a full-stack, real-time web application that serves as a powerful document analysis tool. It uses a secure Firebase backend to manage users and files, and integrates with the Gemini API to provide real-time plagiarism scores and AI-powered summaries for uploaded documents.
-
-This project was built from scratch, featuring a complete React frontend, a serverless Cloud Function backend, and a real-time database architecture using Firestore emulators.
+Welcome to **Research Review**, an AI-powered platform for document analysis and research collaboration. Whether you are a researcher using the tool or a developer setting it up for the first time, this guide covers everything you need.
 
 ---
 
-### Core Features
+## 🛠 Developer Setup (If you just Cloned this Repo)
 
-* **Secure User Authentication:** Full auth system with Email/Password and Google OAuth sign-in.
-* **Real-time AI Analysis:** Upload `.txt` and `.docx` files. A backend Cloud Function reads the text, calls the **Gemini API** for analysis, and provides a **consistent** plagiarism score and summary (achieved by setting `temperature: 0.0`).
-* **Real-Time Database:** The app is fully event-driven. The "Reports" page listens for changes in Firestore, instantly updating a file's status from `Pending` to `Complete` without a page refresh.
-* **Role-Based Access Control:** Features a simple admin system. Users with the `role: "admin"` in Firestore gain access to a special Admin Portal.
-* **Admin Portal:**
-    * **User Management:** A protected page that lists all registered users in the system.
-    * **Audit Log:** A real-time feed that logs critical events like `FILE_UPLOAD` and `POST_CREATE`.
-* **Community & Messaging:**
-    * **Community Feed:** A real-time public forum where users can create and view posts.
-    * **1-to-1 Messaging:** A private, real-time chat system between users.
-    * **Notifications:** A real-time notification system (with an unread badge) that alerts users to new messages.
+Follow these steps to get the project running on your local machine.
 
-### Tech Stack
+### 1. Prerequisites
+Ensure you have the following installed:
+- **Node.js** (v18 or higher)
+- **Firebase CLI** (`npm install -g firebase-tools`)
+- **Git**
 
-#### **Frontend (Client-side)**
-* **React:** Used for building all UI components.
-* **Vite:** Powers the local development server and builds the project.
-* **Tailwind CSS:** Used for all utility-first styling.
-* **Lucide-React:** For all icons.
-* **React-Dropzone:** For the file upload component.
-* **Firebase Client SDK:** Manages authentication (`onAuthStateChanged`) and real-time data (`onSnapshot`).
+### 2. Clone and Install
+```bash
+# Clone the repository
+git clone https://github.com/SapphireBlueAC/Research-Review.git
+cd Research-Review
 
-#### **Backend (Server-side)**
-* **Firebase:** The core backend platform, including:
-    * **Firebase Emulators:** Used for 100% local development (Auth, Firestore, Storage, Functions).
-    * **Firestore:** NoSQL database for storing user data, reports, posts, and messages.
-    * **Firebase Storage:** For hosting all uploaded `.txt` and `.docx` files.
-    * **Firebase Authentication:** Manages user accounts.
-* **Cloud Functions (Node.js):** The "brains" of the backend.
-    * **`onDocumentCreated` Trigger:** The function is triggered *after* a "Pending" report is created, solving all race conditions.
-    * **`node-fetch`**: Used to make secure, server-to-server calls to the Gemini API.
-    * **`mammoth`**: Used to read and extract plain text from `.docx` files.
-    * **`dotenv`**: Used to securely manage the Gemini API key, keeping it out of the code and safe from the Git repository.
+# Install Frontend dependencies
+npm install
+
+# Install Backend (Cloud Functions) dependencies
+cd functions
+npm install
+cd ..
+```
+
+### 3. Environment Configuration
+The backend requires a Google Gemini API Key.
+1. Create a file named `.env` inside the `functions/` folder.
+2. Add your key:
+   ```env
+   GEMINI_API_KEY=your_actual_api_key_here
+   ```
+   *(You can get a free key from [Google AI Studio](https://aistudio.google.com/app/apikey))*
+
+### 4. Running the Local Environment
+We use Firebase Emulators to simulate the database and storage locally.
+```bash
+# Start the emulators
+firebase emulators:start
+```
+In a **separate terminal**, start the React frontend:
+```bash
+npm run dev
+```
+The app will be available at: `http://localhost:5173`
 
 ---
 
-### **How to Run This Project Locally**
+## 📖 User Guide & Tutorial
 
-1.  **Clone the repository:**
-    ```bash
-    git clone [https://github.com/SapphireBlueAC/Research-Review.git](https://github.com/SapphireBlueAC/Research-Review.git)
-    cd Research-Review
-    
-2.  **Install Frontend Dependencies:**
-    ```bash
-    npm install
-    
-3.  **Install Backend Dependencies:**
-    ```bash
-    cd functions
-    npm install
-    cd ..
-    
-4.  **Create Your Firebase Project:**
-    * Go to [firebase.google.com](https://firebase.google.com/) and create a new project.
-    * Enable **Authentication** (Email/Password, Google), **Firestore** (in "Native Mode"), and **Storage**.
-    * Add a **Web App** to your project.
-    * Copy the `firebaseConfig` object and paste it into `src/firebase.js`.
+### 📤 Uploading Documents
+1. Log in via Email or Google.
+2. Go to **"New Upload"**.
+3. Drag & drop a `.pdf`, `.docx`, or `.txt` file.
+4. Click **"Upload and Analyze"**.
+5. Once the status changes to 🟢 **Complete** in the "Reports" tab, click the file name to see your score.
 
-5.  **Get Your Gemini API Key:**
-    * Go to [ai.google.dev](https://ai.google.dev/) and get an API key.
-    * Create a new file in the `functions` folder named `.env`.
-    * Add your key to it like this: `GEMINI_API_KEY=AIzaSy...your...key...`
-    * *(This file is in the `.gitignore` and will not be uploaded.)*
+### 📊 Understanding the AI Report
+- **Similarity Score:** Shows how much of your text matches external sources.
+- **AI Summary:** Click "Generate Summary" to get a high-level overview of the document.
+- **Matched Sources:** See the exact snippets of text that the AI flagged as potential matches.
 
-6.  **Run the Emulators (Terminal 1):**
-    ```bash
-    firebase emulators:start
-    
-7.  **Run the App (Terminal 2):**
-    ```bash
-    npm run dev
-    
-Your app is now running at `http://localhost:5173/`.
+### 👥 Community & Collaboration
+- **Community Feed:** Share your research thoughts and attach files for others to see.
+- **Private Messages:** Click on a user's name in the "Messages" tab to start a secure, real-time chat.
+- **Notifications:** Keep track of who is interacting with your posts or sending you messages.
+
+---
+
+## 🛠 Troubleshooting for Cloners
+
+- **Error: Permission Denied (403):** Your Gemini API key likely has "Referrer" restrictions. Go to the Google Cloud Console and set "Website restrictions" to "None".
+- **Error: Model Not Found (404):** Some API keys don't have access to `gemini-1.5-flash`. The backend will automatically try `gemini-2.0-flash` or `gemini-pro` as fallbacks.
+- **Functions Not Triggering:** Ensure you ran `firebase emulators:start` and that your terminal shows "firestore function initialized".
+
+---
+
+**Developed by [SapphireBlueAC](https://github.com/SapphireBlueAC)**
